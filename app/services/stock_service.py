@@ -3,6 +3,11 @@ from app.data.stocks_data import stocks, trades_by_symbol
 from app.models.trade import Trade
 from app.models.enums import TradeType
 from app.exceptions import StockNotFoundError, InvalidTradeTypeError
+from app.utils.finance_math import (
+    calculate_common_dividend_yield,
+    calculate_preferred_dividend_yield,
+    calculate_pe_ratio as pe_formula,
+)
 import math
 import logging
 from collections import deque
@@ -32,9 +37,12 @@ async def calculate_dividend_yield(symbol: str, price: float) -> dict:
         raise ValueError("Price must be greater than zero")
 
     if stock['type'] == 'Common':
-        return {"dividend_yield": stock['last_dividend'] / price}
+        result = calculate_common_dividend_yield(stock["last_dividend"], price)
     elif stock['type'] == 'Preferred':
-        return {"dividend_yield": (stock['fixed_dividend'] * stock['par_value']) / price}
+        result = calculate_preferred_dividend_yield(stock["fixed_dividend"], stock["par_value"], price)
+
+    logger.info(f"[{symbol}] Dividend Yield: {result}")
+    return {"dividend_yield": result}
 
 async def calculate_pe_ratio(symbol: str, price: float) -> dict:
 
@@ -54,8 +62,10 @@ async def calculate_pe_ratio(symbol: str, price: float) -> dict:
     stock = stocks.get(symbol.upper())
     if not stock:
         raise StockNotFoundError(symbol)
-    dividend = stock['last_dividend']
-    return {"pe_ratio": price / dividend if dividend > 0 else float('inf')}
+    
+    result = pe_formula(price, stock["last_dividend"])
+    logger.info(f"[{symbol}] PE Ratio: {result}")
+    return {"pe_ratio": result}
 
 async def record_trade(trade: Trade) -> dict:
     """
